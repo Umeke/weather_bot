@@ -10,8 +10,9 @@ import pytz
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # API токен бота и API ключ для OpenWeatherMap
-TELEGRAM_BOT_TOKEN = '7244186636:AAE8EH7nPX_Yu_fN08VChHJKCwYuOAy-KIg'
+TELEGRAM_BOT_TOKEN = '7300230847:AAFi6LWaKuvL6iJO-YArlhyusoOGurcilc8'
 WEATHER_API_KEY = 'dd11a63b3c2b7165eb36ac8ad79e9ecf'
+
 
 # Словарь для хранения данных пользователей
 user_data = {}
@@ -46,39 +47,40 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_location = update.message.location
     user_id = update.message.from_user.id
     user_data[user_id] = (user_location.latitude, user_location.longitude)
-    await update.message.reply_text('Локация сохранена! Я настрою ежедневное отправление прогноза погоды на 08:00.')
+    await update.message.reply_text('Локация сақталды! Күн сайын таңғы 08:00-де ауа райын жіберемін.')
 
-    # Get the current time in the timezone +05:00
-    timezone_offset = pytz.FixedOffset(300)  # +05:00 is 300 minutes
+    # Уақыт белдеуі +05:00
+    timezone_offset = pytz.FixedOffset(300)
     now = datetime.now(timezone_offset)
 
-    # Set the time for the job to 08:00:21.547733
-    scheduled_time = time(hour=7, minute=0)
+    scheduled_time = time(hour=8, minute=0)
     now_date = now.date()
-    scheduled_datetime = datetime.combine(now_date, scheduled_time) + timedelta(seconds=21, microseconds=547733)
+    scheduled_datetime = datetime.combine(now_date, scheduled_time).replace(tzinfo=timezone_offset)
 
-    # Set the timezone to +05:00
-    scheduled_datetime = scheduled_datetime.replace(tzinfo=timezone_offset)
-
-    # Calculate the next run time
     if now > scheduled_datetime:
         next_run = scheduled_datetime + timedelta(days=1)
     else:
         next_run = scheduled_datetime
 
-    # Calculate the delay in seconds until the next run
     delay = (next_run - now).total_seconds()
     logging.info(f"Delay in seconds: {delay}")
     logging.info(f"Current time: {now}")
     logging.info(f"Next run time: {next_run}")
 
-    # Schedule the daily job
+    # ✅ 1. Бар job-тарды name арқылы тексеріп, өшіру
+    job_name = str(user_id)
+    old_jobs = context.job_queue.get_jobs_by_name(job_name)
+    for job in old_jobs:
+        job.schedule_removal()
+
+    # ✅ 2. Жаңа job қосу
     context.job_queue.run_repeating(
         partial(send_weather, user_id=user_id),
-        interval=86400,  # 24 hours
-        first=delay,     # Initial delay until the first execution
-        name=str(user_id),
+        interval=86400,
+        first=delay,
+        name=job_name,
     )
+
 
 # Отправка прогноза погоды
 async def send_weather(context: ContextTypes.DEFAULT_TYPE, user_id: int):
